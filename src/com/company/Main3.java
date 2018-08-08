@@ -18,6 +18,7 @@ public class Main3 {
             String line;
             StringBuilder builder = new StringBuilder();
             List<Pair<String, String>> functions = new ArrayList<>();
+            List<Pair<String, String>> arryFunctions = new ArrayList<>();
             List<String> setters = new ArrayList<>();
             Pair<String, String> buildObject = null;
             String builderName = null;
@@ -40,13 +41,13 @@ public class Main3 {
                 } else if (line.startsWith("public io_k8s")) {
                     //Add builder field
                     if (line.contains("[]")) {
-//                        System.out.println(line);
-//                        String arr[] = line.split(" ");
-//                        String childBuilderName = getBuilderName(arr[1]).replace("[]","");
-//                        builder.append("\n");
-//                        builder.append("\tpublic " + childBuilderName + "[]? " + getBuilderFieldName(arr[2]) + ";\n");
-//                        functions.add(new Pair<>(arr[1].replace("?", ""),
-//                                arr[2].replace(";", "")));
+                        System.out.println(line);
+                        String arr[] = line.split(" ");
+                        String childBuilderName = getBuilderName(arr[1]).replace("[]", "");
+                        builder.append("\n");
+                        builder.append("\tpublic " + childBuilderName + "[] " + getBuilderFieldName(arr[2]) + ";\n");
+                        arryFunctions.add(new Pair<>(arr[1].replace("?", "").replace("[]", ""),
+                                arr[2].replace(";", "")));
                         continue;
                     }
                     String arr[] = line.split(" ");
@@ -65,10 +66,14 @@ public class Main3 {
                     for (Pair<String, String> p : functions) {
                         builder.append(generateWithMethod(p.getKey(), p.getValue()));
                     }
+                    for (Pair<String, String> p : arryFunctions) {
+                        builder.append(generateWithArrayMethod(p.getKey(), p.getValue()));
+                    }
                     for (String setter : setters) {
                         builder.append(setter);
                     }
                     builder.append("};\n");
+                    arryFunctions.clear();
                     functions.clear();
                     setters.clear();
                     builderName = null;
@@ -88,7 +93,6 @@ public class Main3 {
             builder.append(getFluentBuilders());
             content = builder.toString();
 //            System.out.println(content);
-
         }
         try (PrintWriter out = new PrintWriter
                 ("/Users/anuruddha/workspace/ballerinax/package-kubernetes/swagger/builders.bal")) {
@@ -180,6 +184,26 @@ public class Main3 {
         return String.format(method, upperCaseFirstLetter(fieldName.replace(";", "")), builderName,
                 builderFieldName
                 , builderName, builderFieldName, builderName);
+
+    }
+
+    private static String generateWithArrayMethod(String fieldType, String fieldName) {
+        String builderName = getBuilderName(fieldType);
+        String builderFieldName = getBuilderFieldName(fieldName);
+        String method = "\tpublic function with%s() returns %s {\n" +
+                "self.%s[lengthof %s] = new %s(self);\n" +
+                " return self.%s[(lengthof %s)-1]; \n" +
+                "}\n";
+
+
+        return String.format(method,
+                upperCaseFirstLetter(fieldName.replace(";", "")),
+                builderName,
+                builderFieldName,
+                builderFieldName,
+                builderName,
+                builderFieldName,
+                builderFieldName);
 
     }
 
