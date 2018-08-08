@@ -33,7 +33,7 @@ public class Main3 {
                     builderName = getBuilderName(arr[2]);
                     builder.append("\npublic type " + builderName + " object {");
                     builder.append("\n");
-                    builder.append("\tpublic FluentBuilder fluentBuilder;\n");
+                    builder.append("\tpublic FluentBuilder? fluentBuilder;\n");
                     buildObject = new Pair(arr[2], getBuildObjectVariableName(arr[2]));
                     builder.append("\tpublic " + arr[2] + " " + buildObject.getValue() + ";");
 
@@ -61,6 +61,7 @@ public class Main3 {
 
                 } else if (line.contains("};")) {
                     builder.append(getConstructor(buildObject.getValue()));
+                    builder.append(getInitMethod());
                     builder.append(getBuildMethod(buildObject));
                     builder.append(getEndMethod());
                     for (Pair<String, String> p : functions) {
@@ -134,7 +135,13 @@ public class Main3 {
     }
 
     private static String getConstructor(String fieldName) {
-        return "\npublic new(fluentBuilder) {\n " + fieldName + " = new;\n }\n";
+        return "\npublic new() {\n " + fieldName + " = new;\n }\n";
+    }
+
+    private static String getInitMethod() {
+        return "public function init(FluentBuilder parent) {\n" +
+                "        self.fluentBuilder = parent;\n" +
+                "    }\n";
     }
 
     private static String getBuildObjectVariableName(String objectType) {
@@ -168,7 +175,8 @@ public class Main3 {
         String builderName = getBuilderName(fieldType);
         String builderFieldName = getBuilderFieldName(fieldName);
         String method = "\tpublic function with%s() returns %s {\n" +
-                "self.%s = new %s(self);\n" +
+                "self.%s = new %s();\n" +
+                "self.%s.init(self);\n" +
                 "match (self.%s) {\n" +
                 "%s builder => {\n" +
                 "return builder;\n" +
@@ -183,7 +191,7 @@ public class Main3 {
 
         return String.format(method, upperCaseFirstLetter(fieldName.replace(";", "")), builderName,
                 builderFieldName
-                , builderName, builderFieldName, builderName);
+                , builderName, builderFieldName, builderFieldName, builderName);
 
     }
 
@@ -191,7 +199,8 @@ public class Main3 {
         String builderName = getBuilderName(fieldType);
         String builderFieldName = getBuilderFieldName(fieldName);
         String method = "\tpublic function with%s() returns %s {\n" +
-                "self.%s[lengthof %s] = new %s(self);\n" +
+                "self.%s[lengthof %s] = new %s();\n" +
+                "self.%s[(lengthof %s)].init(self);\n" +
                 " return self.%s[(lengthof %s)-1]; \n" +
                 "}\n";
 
@@ -202,6 +211,8 @@ public class Main3 {
                 builderFieldName,
                 builderFieldName,
                 builderName,
+                builderFieldName,
+                builderFieldName,
                 builderFieldName,
                 builderFieldName);
 
