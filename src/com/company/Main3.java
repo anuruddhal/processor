@@ -295,7 +295,7 @@ public class Main3 {
         String builderFieldName = getBuilderFieldName(fieldName);
         String method = "\tpublic function with%s() returns %s {\n" +
                 "self.%s[lengthof %s] = new %s();\n" +
-                "self.%s[(lengthof %s)].init(self);\n" +
+                "self.%s[(lengthof %s)-1].init(self);\n" +
                 " return self.%s[(lengthof %s)-1]; \n" +
                 "}\n";
 
@@ -318,9 +318,12 @@ public class Main3 {
             return "\n";
         }
         String endMethod = " public function end%s() returns (%s) {\n" +
-                "match (fluentBuilder) {\n" +
-                "            FluentBuilder parentBuilder => {\n" +
-                "                return check <%s> parentBuilder;\n" +
+                "match (self.fluentBuilder) {\n" +
+                "            %s parentBuilder => {\n" +
+                "                return parentBuilder;\n" +
+                "            }\n" +
+                "FluentBuilder genericBuilder =>{\n" +
+                "                return check<%s>genericBuilder;\n" +
                 "            }\n" +
                 "            () v => {\n" +
                 "                error e = {};\n" +
@@ -336,6 +339,7 @@ public class Main3 {
             String variableName = arr[1];
             endMethods += String.format(endMethod,
                     upperCaseFirstLetter(variableName) + parentBuilder.replace("Builder", ""),
+                    parentBuilder,
                     parentBuilder,
                     parentBuilder
             );
