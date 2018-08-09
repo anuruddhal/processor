@@ -4,21 +4,63 @@ import javafx.util.Pair;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+class WithFunction {
+    private String fieldType;
+    private String fieldName;
+    private String builderName;
+
+    public WithFunction(String fieldType, String fieldName, String builderName) {
+        this.fieldType = fieldType;
+        this.fieldName = fieldName;
+        this.builderName = builderName;
+    }
+
+    public String getFieldType() {
+        return fieldType;
+    }
+
+    public void setFieldType(String fieldType) {
+        this.fieldType = fieldType;
+    }
+
+    public String getFieldName() {
+        return fieldName;
+    }
+
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
+    }
+
+    public String getBuilderName() {
+        return builderName;
+    }
+
+    public void setBuilderName(String builderName) {
+        this.builderName = builderName;
+    }
+}
 
 public class Main3 {
     public static void main(String[] args) throws IOException {
         File file = new File("/Users/anuruddha/workspace/ballerinax/package-kubernetes/swagger/schema.bal");
         String content = "";
+        Map<String, List<String>> objectToUsageObjectMap2 = getObjectDependencyMap();
         try (BufferedReader br = new BufferedReader(new FileReader(file))) {
             String line;
             StringBuilder builder = new StringBuilder();
-            List<Pair<String, String>> functions = new ArrayList<>();
-            List<Pair<String, String>> arryFunctions = new ArrayList<>();
+            List<WithFunction> functions = new ArrayList<>();
+            List<WithFunction> arrayFunctions = new ArrayList<>();
+
             List<String> setters = new ArrayList<>();
             Pair<String, String> buildObject = null;
             String builderName = null;
@@ -41,40 +83,44 @@ public class Main3 {
                 } else if (line.startsWith("public io_k8s")) {
                     //Add builder field
                     if (line.contains("[]")) {
-                        System.out.println(line);
                         String arr[] = line.split(" ");
                         String childBuilderName = getBuilderName(arr[1]).replace("[]", "");
                         builder.append("\n");
-                        builder.append("\tpublic " + childBuilderName + "[] " + getBuilderFieldName(arr[2]) + ";\n");
-                        arryFunctions.add(new Pair<>(arr[1].replace("?", "").replace("[]", ""),
-                                arr[2].replace(";", "")));
+                        String builderFieldName = getBuilderFieldName(arr[2]);
+                        builder.append("\tpublic " + childBuilderName + "[] " + builderFieldName + ";\n");
+                        arrayFunctions.add(new WithFunction(arr[1].replace("?", "").replace("[]", ""),
+                                arr[2].replace(";", ""), builderName.replace("Builder", "")));
                         continue;
                     }
                     String arr[] = line.split(" ");
                     String childBuilderName = getBuilderName(arr[1]);
                     builder.append("\n");
-                    builder.append("\tpublic " + childBuilderName + "? " + getBuilderFieldName(arr[2]) + ";\n");
-
+                    String builderFieldName = getBuilderFieldName(arr[2]);
+                    builder.append("\tpublic " + childBuilderName + "? " + builderFieldName + ";\n");
+                    List<String> temp = null;
                     //Add with method
-                    functions.add(new Pair<>(arr[1].replace("?", ""), arr[2].replace(";", "")));
+                    functions.add(new WithFunction(arr[1].replace("?", ""),
+                            arr[2].replace(";", ""), builderName.replace("Builder", "")));
 
 
                 } else if (line.contains("};")) {
                     builder.append(getConstructor(buildObject.getValue()));
                     builder.append(getInitMethod());
                     builder.append(getBuildMethod(buildObject));
-                    builder.append(getEndMethod());
-                    for (Pair<String, String> p : functions) {
-                        builder.append(generateWithMethod(p.getKey(), p.getValue()));
+                    builder.append(getEndMethod(builderName, objectToUsageObjectMap2.get(builderName)));
+                    for (WithFunction withFunction : functions) {
+                        builder.append(generateWithMethod(withFunction.getFieldType(), withFunction.getFieldName(),
+                                withFunction.getBuilderName()));
                     }
-                    for (Pair<String, String> p : arryFunctions) {
-                        builder.append(generateWithArrayMethod(p.getKey(), p.getValue()));
+                    for (WithFunction withFunction : arrayFunctions) {
+                        builder.append(generateWithArrayMethod(withFunction.getFieldType(), withFunction.getFieldName(),
+                                withFunction.getBuilderName()));
                     }
                     for (String setter : setters) {
                         builder.append(setter);
                     }
                     builder.append("};\n");
-                    arryFunctions.clear();
+                    arrayFunctions.clear();
                     functions.clear();
                     setters.clear();
                     builderName = null;
@@ -87,7 +133,6 @@ public class Main3 {
                     String type = arr[1];
                     String varName = arr[2].substring(0, arr[2].length() - 1);
                     setters.add(getSetterMethod(type, varName, builderName, buildObject.getValue()));
-
                     //builder.append();
                 }
             }
@@ -101,6 +146,56 @@ public class Main3 {
         }
     }
 
+
+    private static Map<String, List<String>> getObjectDependencyMap() throws IOException {
+        File file = new File("/Users/anuruddha/workspace/ballerinax/package-kubernetes/swagger/schema.bal");
+        Map<String, List<String>> objectToUsageObjectMap = new HashMap<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            String builderName = null;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+
+                if (line.isEmpty()) {
+                    continue;
+                }
+                if (line.startsWith("public type")) {
+                    String arr[] = line.split(" ");
+                    builderName = getBuilderName(arr[2]);
+                } else if (line.startsWith("public io_k8s")) {
+                    //Add builder field
+                    if (line.contains("[]")) {
+                        String arr[] = line.split(" ");
+                        String childBuilderName = getBuilderName(arr[1]).replace("[]", "");
+                        String builderFieldName = getBuilderFieldName(arr[2]);
+                        List<String> temp = null;
+                        if (objectToUsageObjectMap.containsKey(childBuilderName)) {
+                            temp = objectToUsageObjectMap.get(childBuilderName);
+                        } else {
+                            temp = new ArrayList<>();
+                        }
+                        temp.add(builderName + ":" + builderFieldName.replace("Builder", ""));
+                        objectToUsageObjectMap.put(childBuilderName, temp);
+                        continue;
+                    }
+                    String arr[] = line.split(" ");
+                    String childBuilderName = getBuilderName(arr[1]);
+                    String builderFieldName = getBuilderFieldName(arr[2]);
+                    List<String> temp = null;
+                    if (objectToUsageObjectMap.containsKey(childBuilderName)) {
+                        temp = objectToUsageObjectMap.get(childBuilderName);
+                    } else {
+                        temp = new ArrayList<>();
+                    }
+                    temp.add(builderName + ":" + builderFieldName.replace("Builder", ""));
+                    objectToUsageObjectMap.put(childBuilderName, temp);
+                }
+            }
+
+        }
+        System.out.println(Arrays.toString(objectToUsageObjectMap.entrySet().toArray()));
+        return objectToUsageObjectMap;
+    }
 
     private static String getSetterMethod(String type, String variableName, String builderName, String builderObject) {
         String addFunction = null;
@@ -171,7 +266,7 @@ public class Main3 {
         return arr[arr.length - 1];
     }
 
-    private static String generateWithMethod(String fieldType, String fieldName) {
+    private static String generateWithMethod(String fieldType, String fieldName, String builder) {
         String builderName = getBuilderName(fieldType);
         String builderFieldName = getBuilderFieldName(fieldName);
         String method = "\tpublic function with%s() returns %s {\n" +
@@ -189,13 +284,13 @@ public class Main3 {
                 "}\n";
 
 
-        return String.format(method, upperCaseFirstLetter(fieldName.replace(";", "")), builderName,
+        return String.format(method, upperCaseFirstLetter(fieldName.replace(";", "")) + builder, builderName,
                 builderFieldName
                 , builderName, builderFieldName, builderFieldName, builderName);
 
     }
 
-    private static String generateWithArrayMethod(String fieldType, String fieldName) {
+    private static String generateWithArrayMethod(String fieldType, String fieldName, String builder) {
         String builderName = getBuilderName(fieldType);
         String builderFieldName = getBuilderFieldName(fieldName);
         String method = "\tpublic function with%s() returns %s {\n" +
@@ -206,7 +301,7 @@ public class Main3 {
 
 
         return String.format(method,
-                upperCaseFirstLetter(fieldName.replace(";", "")),
+                upperCaseFirstLetter(fieldName.replace(";", "")) + builder,
                 builderName,
                 builderFieldName,
                 builderFieldName,
@@ -218,12 +313,34 @@ public class Main3 {
 
     }
 
-    private static String getEndMethod() {
-        String endMethod = " public function end() returns (FluentBuilder) {\n" +
-                "return self.fluentBuilder;\n" +
-                "}\n";
-
-        return endMethod;
+    private static String getEndMethod(String builderName, List<String> dependents) {
+        if (dependents == null) {
+            return "\n";
+        }
+        String endMethod = " public function end%s() returns (%s) {\n" +
+                "match (fluentBuilder) {\n" +
+                "            FluentBuilder parentBuilder => {\n" +
+                "                return check <%s> parentBuilder;\n" +
+                "            }\n" +
+                "            () v => {\n" +
+                "                error e = {};\n" +
+                "                throw e;\n" +
+                "            }\n" +
+                "        }\n" +
+                "}\n\n";
+        String endMethods = "\n";
+        System.out.println(builderName + ":" + dependents);
+        for (String dependent : dependents) {
+            String arr[] = dependent.split(":");
+            String parentBuilder = arr[0];
+            String variableName = arr[1];
+            endMethods += String.format(endMethod,
+                    upperCaseFirstLetter(variableName) + parentBuilder.replace("Builder", ""),
+                    parentBuilder,
+                    parentBuilder
+            );
+        }
+        return endMethods;
     }
 
     private static String getBuildMethod(Pair<String, String> buildObject) {
