@@ -96,7 +96,11 @@ public class Main3 {
                     String childBuilderName = getBuilderName(arr[1]);
                     builder.append("\n");
                     String builderFieldName = getBuilderFieldName(arr[2]);
-                    builder.append("\tpublic " + childBuilderName + "? " + builderFieldName + ";\n");
+                    if (childBuilderName.contains("JSONSchemaProps")) {
+                        builder.append("\tpublic " + childBuilderName + "? " + builderFieldName + ";\n");
+                    } else {
+                        builder.append("\tpublic " + childBuilderName + " " + builderFieldName + ";\n");
+                    }
                     List<String> temp = null;
                     //Add with method
                     functions.add(new WithFunction(arr[1].replace("?", ""),
@@ -109,8 +113,14 @@ public class Main3 {
                     builder.append(getBuildMethod(buildObject));
                     builder.append(getEndMethod(builderName, objectToUsageObjectMap2.get(builderName)));
                     for (WithFunction withFunction : functions) {
-                        builder.append(generateWithMethod(withFunction.getFieldType(), withFunction.getFieldName(),
-                                withFunction.getBuilderName()));
+                        if (withFunction.getBuilderName().contains("JSONSchemaProps")) {
+                            builder.append(generateMatchWithMethod(withFunction.getFieldType(), withFunction
+                                            .getFieldName(),
+                                    withFunction.getBuilderName()));
+                        } else {
+                            builder.append(generateWithMethod(withFunction.getFieldType(), withFunction.getFieldName(),
+                                    withFunction.getBuilderName()));
+                        }
                     }
                     for (WithFunction withFunction : arrayFunctions) {
                         builder.append(generateWithArrayMethod(withFunction.getFieldType(), withFunction.getFieldName(),
@@ -266,7 +276,7 @@ public class Main3 {
         return arr[arr.length - 1];
     }
 
-    private static String generateWithMethod(String fieldType, String fieldName, String builder) {
+    private static String generateMatchWithMethod(String fieldType, String fieldName, String builder) {
         String builderName = getBuilderName(fieldType);
         String builderFieldName = getBuilderFieldName(fieldName);
         String method = "\tpublic function with%s() returns %s {\n" +
@@ -287,6 +297,28 @@ public class Main3 {
         return String.format(method, upperCaseFirstLetter(fieldName.replace(";", "")) + builder, builderName,
                 builderFieldName
                 , builderName, builderFieldName, builderFieldName, builderName);
+
+    }
+
+
+    private static String generateWithMethod(String fieldType, String fieldName, String builder) {
+        String builderName = getBuilderName(fieldType);
+        String builderFieldName = getBuilderFieldName(fieldName);
+        String method = "\tpublic function with%s() returns %s {\n" +
+                "self.%s = new %s();\n" +
+                "self.%s.init(self);\n" +
+                "return %s;\n" +
+                "}\n\n";
+
+
+        return String.format(method,
+                upperCaseFirstLetter(fieldName.replace(";", "")) + builder,
+                builderName,
+                builderFieldName,
+                builderName,
+                builderFieldName,
+                builderFieldName
+        );
 
     }
 
